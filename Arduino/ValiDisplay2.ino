@@ -83,6 +83,7 @@ void loop() {
     counter %= 10000;
     decrement = 0;
 
+    writeShortValue(storage_addr, counter);
     showDisplay(counter);
 }
 

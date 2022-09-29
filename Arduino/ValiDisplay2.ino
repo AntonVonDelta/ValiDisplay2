@@ -15,6 +15,12 @@ const Wiring display = CC;
 const int increment_pin = 2;
 const int decrement_pin = 3;
 const int reset_pin = 4;
+const int output_pin = 5;
+
+// Pins for segments a,b,c,d,e,f,g
+const int segment_pins[] = {6, 7, 8, 9, 10, 11, 12};
+// Pins for digits starting with the left one
+const int common_pins[] = {A0, A1, A2, A3};
 
 // Use values of 1 byte otherwise interrupts can alter the value mid-reading
 // https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
@@ -30,6 +36,9 @@ void setup() {
     pinMode(increment_pin, INPUT_PULLUP);
     pinMode(decrement_pin, INPUT_PULLUP);
     pinMode(reset_pin, INPUT_PULLUP);
+    pinMode(output_pin, OUTPUT);
+
+    digitalWrite(output_pin, HIGH);
 
     attachInterrupt(digitalPinToInterrupt(increment_pin), interruptRoutineIncrement, RISING);
     attachInterrupt(digitalPinToInterrupt(decrement_pin), interruptRoutineDecrement, RISING);
@@ -39,6 +48,17 @@ void loop() {
     if (digitalRead(reset_pin) == LOW) {
         counter = 0;
         writeShortValue(storage_addr, 0);
+    }
+
+    if (decrement && decrement >= counter + increment) {
+        // Means the counter has passed the 0 mark
+        // Vague situation:
+        //  What should happen if counter = 0 and +1 is added and -1 at the same time?
+        //  Is it that the counter increased and then decreased to 0 triggerin the output?
+        //  Or is it that the counter decreased to 9999 and then back to 0?
+        digitalWrite(output_pin, LOW);
+    } else {
+        digitalWrite(output_pin, HIGH);
     }
 
     counter += increment;

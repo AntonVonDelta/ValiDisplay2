@@ -1009,7 +1009,7 @@
     (uuid fa2f9f48-9781-4030-838f-46a383bfbb53)
   )
 
-  (text "The NPN transistors are used in the emitter follower configuration.\nThe voltage across Emitter pin and ground is the base voltage - 0.7V.\nThe transistor provides all the current needed to maintain this voltage Emitter-Ground.\nThe current is limited by the resistors on the other side of the display.\n\nRled = (5V - 0.7V - 2V)/ (15mA/1000) = 153ohm\nThe two voltage drops 0.7V and 2V are caused by two diodes:\n	- the Base-Emitter diode\n	- led diode\n5V are provided by the microcontroller."
+  (text "The NPN transistors are used in the emitter follower configuration.\nThe voltage across Emitter pin and ground is equal to the base voltage - 0.7V.\nThe transistor provides all the current needed to maintain this voltage Emitter-Ground.\nThe current is limited by the resistors on the other side of the display.\n\nRled = (5V - 0.7V - 2V) / (15mA/1000) = 153ohm\nThe two voltage drops 0.7V and 2V are caused by two diodes:\n	- the Base-Emitter diode\n	- led diode\n5V are provided by the microcontroller."
     (at 45.72 175.26 0)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 3a917acf-40f2-4739-afba-06175506b772)

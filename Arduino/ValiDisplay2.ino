@@ -1,17 +1,14 @@
 #include <EEPROM.h>
 
+#define SZ(x) sizeof(x) / sizeof(x[0])
+
+void showDisplay(uint16_t nr);
 void interruptRoutineIncrement();
 void interruptRoutineDecrement();
 uint16_t readShortValue(int addr);
 void writeShortValue(int addr, uint16_t val);
 
-enum Wiring {
-    CC,
-    CA
-};
-
 const int storage_addr = 0;
-const Wiring display = CC;
 const int increment_pin = 2;
 const int decrement_pin = 3;
 const int reset_pin = 4;
@@ -21,6 +18,11 @@ const int output_pin = 5;
 const int segment_pins[] = {6, 7, 8, 9, 10, 11, 12};
 // Pins for digits starting with the left one
 const int common_pins[] = {A0, A1, A2, A3};
+// The index of the array is the digit 0-9
+// The value is 7 bits with the lowest one being a then b, etc.
+// 0000 0000
+//  gfe dcba
+const uint8_t map_digit_to_pins[] = {0x3F, 0x6, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x7, 0x7F, 0x6F};
 
 // Use values of 1 byte otherwise interrupts can alter the value mid-reading
 // https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
@@ -39,6 +41,18 @@ void setup() {
     pinMode(output_pin, OUTPUT);
 
     digitalWrite(output_pin, HIGH);
+
+    for (int i = 0; i < SZ(segment_pins); i++) {
+        pinMode(segment_pins[i], OUTPUT);
+
+        // Common-Anode segments have inverted logic.
+        // Set to low to disable
+        digitalWrite(segment_pins[i], HIGH);
+    }
+    for (int i = 0; i < SZ(common_pins); i++) {
+        pinMode(common_pins[i], OUTPUT);
+        digitalWrite(common_pins[i], LOW);
+    }
 
     attachInterrupt(digitalPinToInterrupt(increment_pin), interruptRoutineIncrement, RISING);
     attachInterrupt(digitalPinToInterrupt(decrement_pin), interruptRoutineDecrement, RISING);
@@ -68,6 +82,33 @@ void loop() {
     counter = (counter - decrement) + 10000;
     counter %= 10000;
     decrement = 0;
+
+    showDisplay(counter);
+}
+
+void showDisplay(uint16_t nr) {
+    for (int i = 0; i < 4; i++) {
+        uint8_t digit = nr % 10;
+        uint8_t active_pins = map_digit_to_pins[digit];
+
+        if (i == 0)
+            digitalWrite(common_pins[3], LOW);
+        else
+            digitalWrite(common_pins[i - 1], LOW);
+
+        // Start iterating through leds: a to g
+        for (int j = 0; j < 7; j++) {
+            // Check if the bit corresponding to led with index <j> is on
+            if ((active_pins >> j) & 0x1) {
+                digitalWrite(segment_pins[j], HIGH);
+            } else {
+                digitalWrite(segment_pins[j], LOW);
+            }
+        }
+        digitalWrite(common_pins[i], HIGH);
+
+        nr /= 10;
+    }
 }
 
 void interruptRoutineIncrement() {

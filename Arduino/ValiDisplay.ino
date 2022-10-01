@@ -15,7 +15,10 @@ void interruptRoutineDecrement();
 uint16_t readShortValue(int addr);
 void writeShortValue(int addr, uint16_t val);
 
-const Wiring display = CA;
+const Wiring display = Wiring::CA;
+const int led_on_state = (display == Wiring::CA ? LOW : HIGH);
+const int led_off_state = (display == Wiring::CA ? HIGH : LOW);
+const int refresh_period_ms = 10; // Period in ms of refresh frequency
 const int storage_addr = 0;
 const int increment_pin = 2;
 const int decrement_pin = 3;
@@ -52,13 +55,7 @@ void setup() {
 
     for (int i = 0; i < SZ(segment_pins); i++) {
         pinMode(segment_pins[i], OUTPUT);
-
-        if (display == Wiring::CA) {
-            // Common-Anode segments have inverted logic.
-            digitalWrite(segment_pins[i], HIGH);
-        } else {
-            digitalWrite(segment_pins[i], LOW);
-        }
+        digitalWrite(segment_pins[i], led_off_state);
     }
     for (int i = 0; i < SZ(common_pins); i++) {
         pinMode(common_pins[i], OUTPUT);
@@ -70,33 +67,52 @@ void setup() {
 }
 
 void loop() {
+    int prev_increment = 0;
+    int prev_decrement = 0;
+
     if (digitalRead(reset_pin) == LOW) {
         counter = 0;
         writeShortValue(storage_addr, 0);
     }
 
-    counter = min(counter + increment, 9999);
-    counter = max(counter - decrement, 0);
-
-    if ((decrement || increment) && counter == 0) {
-        // Means that the counter was moved somehow (by incrementing or decrementing)
-        // and the counter reached 0
-        digitalWrite(output_pin, LOW);
-    } else {
-        digitalWrite(output_pin, HIGH);
-    }
-
+    noInterrupts();
+    prev_increment = increment;
+    prev_decrement = decrement;
     increment = 0;
     decrement = 0;
+    interrupts();
+
+    if (prev_decrement && prev_decrement >= counter) {
+        // Means that the counter was moved and it passed through 0.
+        digitalWrite(output_pin, LOW);
+        delayMicroseconds(1); // Most chips need at least 20ns so this is enough.
+        digitalWrite(output_pin, HIGH);
+        delayMicroseconds(1);
+    }
+
+    if (prev_increment && prev_increment >= 10000 - counter) {
+        // Means that the counter was moved and it passed through 0.
+        digitalWrite(output_pin, LOW);
+        delayMicroseconds(1); // Most chips need at least 20ns so this is enough.
+        digitalWrite(output_pin, HIGH);
+        delayMicroseconds(1);
+    }
+
+    counter += prev_increment;
+    counter %= 10000;
+
+    counter = (counter - prev_decrement) + 10000;
+    counter %= 10000;
 
     writeShortValue(storage_addr, counter);
     showDisplay(counter);
 }
 
 void showDisplay(uint16_t nr) {
-    for (int i = 0; i < SZ(common_pins); i++) {
-        const int on_state = (display == Wiring::CA ? LOW : HIGH);
-        const int off_state = (display == Wiring::CA ? HIGH : LOW);
+    const int digit_period_ms = refresh_period_ms / SZ(common_pins); // Time to spend on each digit
+    bool show_digits = false;                                        // Do not show the far left digits if they are 0
+
+    for (int i = SZ(common_pins); i >= 0; i--) {
         uint8_t digit = nr % 10;
         uint8_t active_segments = map_digit_to_segments[digit];
 
@@ -105,16 +121,27 @@ void showDisplay(uint16_t nr) {
         else
             digitalWrite(common_pins[i - 1], LOW);
 
+        if (!show_digits && digit == 0) {
+            // We want to control the total timings very precisely
+            // Otherwise if we skip the delay for some digits then
+            // the overall panel will look brighter.
+            // We don't want the brightness to vary depending on the number if digits shown.
+            delay(digit_period_ms);
+            continue;
+        }
+        show_digits = true;
+
         // Start iterating through leds: a to g
         for (int j = 0; j < SZ(segment_pins); j++) {
             // Check if the bit corresponding to led with index <j> is on
             if ((active_segments >> j) & 0x1) {
-                digitalWrite(segment_pins[j], on_state);
+                digitalWrite(segment_pins[j], led_on_state);
             } else {
-                digitalWrite(segment_pins[j], off_state);
+                digitalWrite(segment_pins[j], led_off_state);
             }
         }
         digitalWrite(common_pins[i], HIGH);
+        delay(digit_period_ms);
 
         nr /= 10;
     }

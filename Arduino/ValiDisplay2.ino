@@ -2,12 +2,20 @@
 
 #define SZ(x) sizeof(x) / sizeof(x[0])
 
+// For both wiring configurations use NPN transistors!
+// This code won't work with PNP transistors without some adjustments.
+enum Wiring {
+    CC,
+    CA
+};
+
 void showDisplay(uint16_t nr);
 void interruptRoutineIncrement();
 void interruptRoutineDecrement();
 uint16_t readShortValue(int addr);
 void writeShortValue(int addr, uint16_t val);
 
+const Wiring display = CA;
 const int storage_addr = 0;
 const int increment_pin = 2;
 const int decrement_pin = 3;
@@ -20,9 +28,9 @@ const int segment_pins[] = {6, 7, 8, 9, 10, 11, 12};
 const int common_pins[] = {A0, A1, A2, A3};
 // The index of the array is the digit 0-9
 // The value is 7 bits with the lowest one being a then b, etc.
-// 0000 0000
-//  gfe dcba
-const uint8_t map_digit_to_pins[] = {0x3F, 0x6, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x7, 0x7F, 0x6F};
+// MSB -->  0000 0000 <-- LSB
+//           gfe dcba
+const uint8_t map_digit_to_segments[] = {0x3F, 0x6, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x7, 0x7F, 0x6F};
 
 // Use values of 1 byte otherwise interrupts can alter the value mid-reading
 // https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
@@ -45,9 +53,12 @@ void setup() {
     for (int i = 0; i < SZ(segment_pins); i++) {
         pinMode(segment_pins[i], OUTPUT);
 
-        // Common-Anode segments have inverted logic.
-        // Set to low to disable
-        digitalWrite(segment_pins[i], HIGH);
+        if (display == Wiring::CA) {
+            // Common-Anode segments have inverted logic.
+            digitalWrite(segment_pins[i], HIGH);
+        } else {
+            digitalWrite(segment_pins[i], LOW);
+        }
     }
     for (int i = 0; i < SZ(common_pins); i++) {
         pinMode(common_pins[i], OUTPUT);
@@ -64,23 +75,18 @@ void loop() {
         writeShortValue(storage_addr, 0);
     }
 
-    if (decrement && decrement >= counter + increment) {
-        // Means the counter has passed the 0 mark
-        // Vague situation:
-        //  What should happen if counter = 0 and +1 is added and -1 at the same time?
-        //  Is it that the counter increased and then decreased to 0 triggerin the output?
-        //  Or is it that the counter decreased to 9999 and then back to 0?
+    counter = min(counter + increment, 9999);
+    counter = max(counter - decrement, 0);
+
+    if ((decrement || increment) && counter == 0) {
+        // Means that the counter was moved somehow (by incrementing or decrementing)
+        // and the counter reached 0
         digitalWrite(output_pin, LOW);
     } else {
         digitalWrite(output_pin, HIGH);
     }
 
-    counter += increment;
-    counter %= 10000;
     increment = 0;
-
-    counter = (counter - decrement) + 10000;
-    counter %= 10000;
     decrement = 0;
 
     writeShortValue(storage_addr, counter);
@@ -88,22 +94,24 @@ void loop() {
 }
 
 void showDisplay(uint16_t nr) {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < SZ(common_pins); i++) {
+        const int on_state = (display == Wiring::CA ? LOW : HIGH);
+        const int off_state = (display == Wiring::CA ? HIGH : LOW);
         uint8_t digit = nr % 10;
-        uint8_t active_pins = map_digit_to_pins[digit];
+        uint8_t active_segments = map_digit_to_segments[digit];
 
         if (i == 0)
-            digitalWrite(common_pins[3], LOW);
+            digitalWrite(common_pins[SZ(common_pins) - 1], LOW);
         else
             digitalWrite(common_pins[i - 1], LOW);
 
         // Start iterating through leds: a to g
-        for (int j = 0; j < 7; j++) {
+        for (int j = 0; j < SZ(segment_pins); j++) {
             // Check if the bit corresponding to led with index <j> is on
-            if ((active_pins >> j) & 0x1) {
-                digitalWrite(segment_pins[j], HIGH);
+            if ((active_segments >> j) & 0x1) {
+                digitalWrite(segment_pins[j], on_state);
             } else {
-                digitalWrite(segment_pins[j], LOW);
+                digitalWrite(segment_pins[j], off_state);
             }
         }
         digitalWrite(common_pins[i], HIGH);

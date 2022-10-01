@@ -2,4 +2,4 @@
 Cod Arduino si schema electronica pentru un afisaj anod-comun.
 
 # Schematica
-![Diagrama](Schematica/ValiDisplay2.svg)
+![Diagrama](Schematica/ValiDisplay.svg)

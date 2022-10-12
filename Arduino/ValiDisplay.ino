@@ -18,7 +18,7 @@ void writeShortValue(int addr, uint16_t val);
 const Wiring display = Wiring::CA;
 const int led_on_state = (display == Wiring::CA ? LOW : HIGH);
 const int led_off_state = (display == Wiring::CA ? HIGH : LOW);
-const int refresh_period_ms = 10; // Period in ms of refresh frequency
+const int refresh_period_ms = 20; // Period in ms of refresh frequency
 const int storage_addr = 0;
 const int increment_pin = 2;
 const int decrement_pin = 3;
@@ -109,19 +109,19 @@ void loop() {
 }
 
 void showDisplay(uint16_t nr) {
-    const int digit_period_ms = refresh_period_ms / SZ(common_pins); // Time to spend on each digit
+    int digit_period_ms = refresh_period_ms / SZ(common_pins);      // Time to spend on each digit
     bool show_digits = false;                                        // Do not show the far left digits if they are 0
 
-    for (int i = SZ(common_pins); i >= 0; i--) {
-        uint8_t digit = nr % 10;
+    for (int i = SZ(common_pins) - 1; i >= 0; i--) {
+        uint8_t digit = (nr / round(pow(10, i))) % 10;
         uint8_t active_segments = map_digit_to_segments[digit];
 
-        if (i == 0)
-            digitalWrite(common_pins[SZ(common_pins) - 1], LOW);
+        if (i == SZ(common_pins) - 1)
+            digitalWrite(common_pins[0], LOW);
         else
-            digitalWrite(common_pins[i - 1], LOW);
+            digitalWrite(common_pins[i + 1], LOW);
 
-        if (!show_digits && digit == 0) {
+        if (!show_digits && digit == 0 && i != 0) {
             // We want to control the total timings very precisely
             // Otherwise if we skip the delay for some digits then
             // the overall panel will look brighter.
@@ -140,10 +140,9 @@ void showDisplay(uint16_t nr) {
                 digitalWrite(segment_pins[j], led_off_state);
             }
         }
+
         digitalWrite(common_pins[i], HIGH);
         delay(digit_period_ms);
-
-        nr /= 10;
     }
 }
 
